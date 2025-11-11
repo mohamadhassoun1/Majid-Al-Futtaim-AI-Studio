@@ -1,0 +1,7 @@
+{
+  "name": "Majid Al Futtaim - Expiration Date Tracker",
+  "description": "A modern, professional website to track and manage expiration dates of various items, sending notifications for items that are nearing their expiration date. Includes a user-friendly admin dashboard for easy management.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
