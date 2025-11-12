@@ -10,6 +10,7 @@ export interface User {
   name: string;
   role: 'admin' | 'staff';
   storeId?: string;
+  credential?: string; // To hold admin password or staff access code for subsequent requests
 }
 
 export enum Status {

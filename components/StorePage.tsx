@@ -8,7 +8,7 @@ import BottomNavBar from './BottomNavBar';
 import AlertsView from './AlertsView';
 import StaffLeaderboard from './StaffLeaderboard';
 import { getDaysRemaining, getStatus } from '../utils/statusHelper';
-import { apiPost } from '../utils/api';
+import { GoogleGenAI } from "@google/genai";
 
 interface AppData {
   items: Item[];
@@ -21,7 +21,7 @@ interface StorePageProps {
   appData: AppData;
   currentUser: User;
   onLogout: () => void;
-  onAddItem: (item: Omit<Item, 'itemId' | 'addedByStaffId'>, storeCode: string) => void;
+  onAddItem: (item: Omit<Item, 'itemId' | 'addedByStaffId' | 'storeCode'>) => void;
   onUpdateItem: (item: Item) => void;
   onDeleteItem: (itemId: string) => void;
 }
@@ -62,19 +62,15 @@ const StorePage: React.FC<StorePageProps> = ({ appData, currentUser, onLogout, o
   const [aiResponse, setAiResponse] = useState('');
   const [isThinking, setIsThinking] = useState(false);
 
-  const handleAddItemSubmit = (item: Omit<Item, 'itemId' | 'addedByStaffId'>) => {
-    if (currentUser.storeId) {
-        onAddItem(item, currentUser.storeId);
-    } else {
-        alert("Error: Your store is not assigned. Cannot add item.");
-    }
+  const handleAddItemSubmit = (item: Omit<Item, 'itemId' | 'addedByStaffId' | 'storeCode'>) => {
+    onAddItem(item);
   };
 
   const handleUpdateItemSubmit = (updatedItem: Item) => {
     onUpdateItem(updatedItem);
   };
 
-  const handleDeleteItem = async (itemId: string) => {
+  const handleDeleteItemClick = (itemId: string) => {
     if (!window.confirm("Are you sure you want to delete this item?")) return;
     onDeleteItem(itemId);
   };
@@ -103,16 +99,19 @@ const StorePage: React.FC<StorePageProps> = ({ appData, currentUser, onLogout, o
     setAiResponse('');
     
     try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
         const itemContext = currentStoreItems.map(item => 
             `- ${item.name} (Qty: ${item.quantity}, Expires: ${item.expirationDate})`
         ).join('\n');
 
         const systemInstruction = `You are an expert inventory analysis assistant for Majid Al Futtaim. The user is a staff member at the '${store?.name}' store. Analyze the following inventory data for their store to answer their question. Provide concise, actionable insights.`;
         
-        const response = await apiPost('/ai/ask', {
-            query: aiQuery,
-            itemContext,
-            systemInstruction
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: `Inventory Data:\n${itemContext || 'No items in this store.'}\n\nUser Query: ${aiQuery}`,
+            config: {
+                systemInstruction: systemInstruction,
+            },
         });
 
         setAiResponse(response.text);
@@ -199,7 +198,7 @@ const StorePage: React.FC<StorePageProps> = ({ appData, currentUser, onLogout, o
   
   const renderMainContent = () => {
     switch(activeView) {
-        case 'alerts': return <AlertsView items={currentStoreItems} onEdit={handleEditClick} onDelete={handleDeleteItem} />;
+        case 'alerts': return <AlertsView items={currentStoreItems} onEdit={handleEditClick} onDelete={handleDeleteItemClick} />;
         case 'ranks': return <StaffLeaderboard allItems={items} staffList={staff} accessCodes={accessCodes} stores={stores} />;
         case 'ai': return (
             <div className="animate-fade-in">
@@ -262,7 +261,7 @@ const StorePage: React.FC<StorePageProps> = ({ appData, currentUser, onLogout, o
                     </div>
                     {displayedItems.length > 0 ? (
                         <div className="space-y-3">
-                            {displayedItems.map(item => <ItemCard key={item.itemId} item={item} onEdit={handleEditClick} onDelete={handleDeleteItem} />)}
+                            {displayedItems.map(item => <ItemCard key={item.itemId} item={item} onEdit={handleEditClick} onDelete={handleDeleteItemClick} />)}
                         </div>
                     ) : (
                         <p className="text-center py-10 text-text-light text-sm">{searchQuery ? `No items found for "${searchQuery}".` : `No items in "${activeFilter}" category.`}</p>

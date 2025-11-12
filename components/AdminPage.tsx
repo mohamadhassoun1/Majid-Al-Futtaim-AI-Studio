@@ -15,7 +15,6 @@ interface AdminPageProps {
   appData: AppData;
   onNavigateToDashboard: () => void;
   onLogout: () => void;
-  // FIX: Update the function signature to return a Promise<boolean> to match the async function in App.tsx.
   onAddStaffAndCode: (storeCode: string, staffId: string) => Promise<boolean>;
   onDeleteCode: (code: AccessCode) => void;
 }
@@ -63,7 +62,6 @@ const AdminPage: React.FC<AdminPageProps> = ({ appData, onNavigateToDashboard, o
     });
   }, [stores, storeStats]);
 
-  // FIX: Make the handler async and await the result of the prop function.
   const handleAddStaffClick = async () => {
     const success = await onAddStaffAndCode(selectedStoreCode, staffId);
     if (success) {
@@ -82,53 +80,41 @@ const AdminPage: React.FC<AdminPageProps> = ({ appData, onNavigateToDashboard, o
   }, [accessCodes]);
 
   const renderCodesList = () => {
+    let codesToDisplay: AccessCode[] = [];
     if (staffSearchQuery) {
-        const searchResults = accessCodes.filter((code: AccessCode) => 
+        codesToDisplay = accessCodes.filter((code: AccessCode) => 
             code.staffId.toLowerCase().includes(staffSearchQuery.toLowerCase())
         );
-
-        if (searchResults.length === 0) {
+        if (codesToDisplay.length === 0) {
             return <p className="text-center text-gray-500 py-8">No staff found matching "{staffSearchQuery}".</p>;
         }
-
-        return (
-            <ul className="space-y-3">
-                {searchResults.map((code: AccessCode) => {
-                    const storeName = stores.find(s => s.code === code.storeCode)?.name || 'Unknown Store';
-                    return (
-                        <li key={code.code} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-border-color">
-                            <div>
-                                <p className="font-mono text-lg text-primary">{code.code}</p>
-                                <p className="text-sm">Staff ID: {code.staffId}</p>
-                                <p className="text-xs text-text-light">Store: {storeName}</p>
-                            </div>
-                            <button onClick={() => onDeleteCode(code)} className="text-error font-semibold text-sm hover:underline">Delete</button>
-                        </li>
-                    );
-                })}
-            </ul>
-        );
-    }
-
-    const currentStoreCodes = accessCodesByStore[selectedStoreCode] || [];
-    if (currentStoreCodes.length === 0) {
-        return <p className="text-center text-gray-500 py-8">No access codes for this store.</p>;
+    } else {
+        codesToDisplay = accessCodesByStore[selectedStoreCode] || [];
+        if (codesToDisplay.length === 0) {
+            return <p className="text-center text-gray-500 py-8">No access codes for this store.</p>;
+        }
     }
 
     return (
         <ul className="space-y-3">
-            {currentStoreCodes.map((code) => (
-                <li key={code.code} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-border-color">
-                    <div>
-                        <p className="font-mono text-lg text-primary">{code.code}</p>
-                        <p className="text-sm">Staff ID: {code.staffId}</p>
-                    </div>
-                    <button onClick={() => onDeleteCode(code)} className="text-error font-semibold text-sm hover:underline">Delete</button>
-                </li>
-            ))}
+            {codesToDisplay.map((code: AccessCode) => {
+                // For search results, the storeCode comes directly from the code object.
+                const store = stores.find(s => s.code === code.storeCode);
+                const storeName = store?.name || 'Unknown Store';
+                return (
+                    <li key={code.code} className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-border-color">
+                        <div>
+                            <p className="font-mono text-lg text-primary">{code.code}</p>
+                            <p className="text-sm">Staff ID: {code.staffId}</p>
+                            {staffSearchQuery && <p className="text-xs text-text-light">Store: {storeName}</p>}
+                        </div>
+                        <button onClick={() => onDeleteCode(code)} className="text-error font-semibold text-sm hover:underline">Delete</button>
+                    </li>
+                );
+            })}
         </ul>
     );
-};
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen">

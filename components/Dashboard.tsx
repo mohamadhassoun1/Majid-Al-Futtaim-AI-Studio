@@ -10,7 +10,7 @@ import AlertsView from './AlertsView';
 import SideMenu from './SideMenu';
 import StaffLeaderboard from './StaffLeaderboard';
 import { getDaysRemaining, getStatus } from '../utils/statusHelper';
-import { apiPost } from '../utils/api';
+import { GoogleGenAI } from "@google/genai";
 
 interface AppData {
   items: Item[];
@@ -23,7 +23,7 @@ interface DashboardProps {
     appData: AppData;
     currentUser: User;
     onNavigateToAdmin: () => void;
-    onAddItem: (item: Omit<Item, 'itemId' | 'addedByStaffId'>, storeCode: string) => void;
+    onAddItem: (item: Omit<Item, 'itemId' | 'addedByStaffId' | 'storeCode'>) => void;
     onUpdateItem: (item: Item) => void;
     onDeleteItem: (itemId: string) => void;
 }
@@ -55,15 +55,15 @@ const Dashboard: React.FC<DashboardProps> = ({ appData, currentUser, onNavigateT
       return allItems.filter(item => item.storeCode === selectedStore.code);
   }, [allItems, selectedStore.code]);
 
-  const handleAddItemSubmit = (item: Omit<Item, 'itemId'>) => {
-    onAddItem(item, selectedStore.code);
+  const handleAddItemSubmit = (item: Omit<Item, 'itemId' | 'addedByStaffId' | 'storeCode'>) => {
+    onAddItem(item);
   };
 
-  const handleUpdateItemSubmit = async (updatedItem: Item) => {
+  const handleUpdateItemSubmit = (updatedItem: Item) => {
     onUpdateItem(updatedItem);
   };
 
-  const handleDeleteItem = async (itemId: string) => {
+  const handleDeleteItemClick = (itemId: string) => {
       if (!window.confirm("Are you sure you want to delete this item?")) return;
       onDeleteItem(itemId);
   };
@@ -98,16 +98,19 @@ const Dashboard: React.FC<DashboardProps> = ({ appData, currentUser, onNavigateT
     setAiResponse('');
 
     try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
         const itemContext = currentStoreItems.map(item => 
             `- ${item.name} (Qty: ${item.quantity}, Expires: ${item.expirationDate})`
         ).join('\n');
         
         const systemInstruction = `You are an expert inventory analysis assistant for Majid Al Futtaim. The user is an admin looking at the '${selectedStore.name}' store. Analyze the provided inventory data to answer the user's question. Provide concise, actionable insights.`;
         
-        const response = await apiPost('/ai/ask', {
-            query: aiQuery,
-            itemContext,
-            systemInstruction
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-pro",
+            contents: `Inventory Data:\n${itemContext || 'No items in this store.'}\n\nUser Query: ${aiQuery}`,
+            config: {
+                systemInstruction: systemInstruction,
+            },
         });
 
         setAiResponse(response.text);
@@ -194,7 +197,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appData, currentUser, onNavigateT
   
   const renderMainContent = () => {
       switch(activeView) {
-        case 'alerts': return <AlertsView items={currentStoreItems} onEdit={handleEditClick} onDelete={handleDeleteItem} />;
+        case 'alerts': return <AlertsView items={currentStoreItems} onEdit={handleEditClick} onDelete={handleDeleteItemClick} />;
         case 'ranks': return <StaffLeaderboard allItems={allItems} staffList={staff} accessCodes={accessCodes} stores={stores} />;
         case 'ai': return (
             <div className="animate-fade-in">
@@ -257,7 +260,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appData, currentUser, onNavigateT
                     </div>
                     {displayedItems.length > 0 ? (
                         <div className="space-y-3">
-                            {displayedItems.map(item => <ItemCard key={item.itemId} item={item} onEdit={handleEditClick} onDelete={handleDeleteItem} />)}
+                            {displayedItems.map(item => <ItemCard key={item.itemId} item={item} onEdit={handleEditClick} onDelete={handleDeleteItemClick} />)}
                         </div>
                     ) : (
                         <p className="text-center py-10 text-text-light text-sm">{searchQuery ? `No items found for "${searchQuery}".` : `No items in the "${activeFilter}" category.`}</p>

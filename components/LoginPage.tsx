@@ -1,32 +1,32 @@
 
 // components/LoginPage.tsx
 import React, { useState } from 'react';
-import { User } from '../types';
-import { apiPost } from '../utils/api';
 
 interface LoginPageProps {
-  onLogin: (user: User) => void;
+  onLoginAttempt: (role: 'admin' | 'staff', credential: string) => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLoginAttempt }) => {
   const [loginType, setLoginType] = useState<'admin' | 'staff'>('staff');
   const [credential, setCredential] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLoginAttempt = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    try {
-      const user = await apiPost('/login', { role: loginType, credential });
-      onLogin(user);
-    } catch (e: any) {
-      setError(e.message || 'Login failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    // Use a timeout to simulate network latency for better UX
+    setTimeout(() => {
+      try {
+        onLoginAttempt(loginType, credential);
+      } catch (e: any) {
+        setError(e.message || 'Login failed. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 500);
   };
 
   return (
@@ -36,16 +36,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <button onClick={() => { setLoginType('admin'); setCredential(''); setError(''); }} className={`flex-1 py-2 font-semibold text-sm rounded-full transition-all ${loginType === 'admin' ? 'bg-white text-primary shadow' : 'text-text-light'}`}>Admin Login</button>
           <button onClick={() => { setLoginType('staff'); setCredential(''); setError(''); }} className={`flex-1 py-2 font-semibold text-sm rounded-full transition-all ${loginType === 'staff' ? 'bg-white text-primary shadow' : 'text-text-light'}`}>Store Login</button>
         </div>
-        <form onSubmit={handleLoginAttempt} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
           {loginType === 'admin' ? (
             <div>
               <h2 className="text-xl font-bold text-center text-text-dark">Admin Access</h2>
-              <input type="password" placeholder="Password" value={credential} onChange={(e) => setCredential(e.target.value)} className="mt-4 w-full px-4 py-3 bg-gray-100 border-transparent rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary transition text-text-dark" required />
+              <input type="password" placeholder="Password" value={credential} onChange={(e) => setCredential(e.target.value)} className="mt-2 w-full px-4 py-3 bg-gray-100 border-transparent rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary transition text-text-dark" required />
             </div>
           ) : (
             <div>
               <h2 className="text-xl font-bold text-center text-text-dark">Store Access</h2>
-              <input type="text" placeholder="Access Code" value={credential} onChange={(e) => setCredential(e.target.value)} className="mt-4 w-full px-4 py-3 bg-gray-100 border-transparent rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary transition text-text-dark" required />
+               <p className="text-center text-xs text-text-light mt-1">(Hint: try code ABCDE)</p>
+              <input type="text" placeholder="Access Code" value={credential} onChange={(e) => setCredential(e.target.value)} className="mt-2 w-full px-4 py-3 bg-gray-100 border-transparent rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary transition text-text-dark" required />
             </div>
           )}
           {error && <p className="text-error text-sm text-center">{error}</p>}

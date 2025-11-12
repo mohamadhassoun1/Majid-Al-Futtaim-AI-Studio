@@ -1,123 +1,157 @@
 
 // App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Dashboard from './components/Dashboard';
 import AdminPage from './components/AdminPage';
 import LoginPage from './components/LoginPage';
 import StorePage from './components/StorePage';
 import { User, Item, Staff, AccessCode } from './types';
 import { stores as staticStores } from './data/stores';
-import { apiGet, apiPost } from './utils/api';
+
+const getInitialData = () => {
+  const staff: Staff[] = [];
+  const accessCodes: AccessCode[] = [];
+  const items: Item[] = [];
+
+  const initialStaffId = 'STAFF-1';
+  const initialStoreCode = 'C42';
+  staff.push({
+      staffId: initialStaffId,
+      name: 'John Doe',
+      storeId: initialStoreCode,
+  });
+  const initialCode = 'ABCDE';
+  accessCodes.push({
+      code: initialCode,
+      staffId: initialStaffId,
+      createdAt: Date.now(),
+      storeCode: initialStoreCode,
+  });
+  
+  const today = new Date();
+  const expiringSoonDate = new Date();
+  expiringSoonDate.setDate(today.getDate() + 5);
+  const expiredDate = new Date();
+  expiredDate.setDate(today.getDate() - 2);
+  const activeDate = new Date();
+  activeDate.setDate(today.getDate() + 10);
+  const toYYYYMMDD = (d: Date) => d.toISOString().split('T')[0];
+
+  items.push({
+      itemId: 'item_1', name: 'Milk', category: 'Dairy', expirationDate: toYYYYMMDD(expiringSoonDate),
+      notificationDays: 7, quantity: 2, imageUrl: 'https://i.imgur.com/iVv5vFw.png', addedByStaffId: initialStaffId, storeCode: initialStoreCode
+  });
+  items.push({
+      itemId: 'item_2', name: 'Bread', category: 'Bakery', expirationDate: toYYYYMMDD(expiredDate),
+      notificationDays: 3, quantity: 1, imageUrl: 'https://i.imgur.com/T5f1p3w.png', addedByStaffId: initialStaffId, storeCode: initialStoreCode
+  });
+  items.push({
+      itemId: 'item_3', name: 'Cheese', category: 'Dairy', expirationDate: toYYYYMMDD(activeDate),
+      notificationDays: 14, quantity: 5, imageUrl: 'https://i.imgur.com/eAnC7Vz.png', addedByStaffId: initialStaffId, storeCode: 'C16'
+  });
+
+  return { staff, accessCodes, items };
+};
+
 
 const App: React.FC = () => {
+  const [initialData] = useState(getInitialData());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
-  const [staff, setStaff] = useState<Staff[]>([]);
-  const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
-  const [stores, setStores] = useState<{ code: string; name: string }[]>(staticStores); // Start with static, then fetch
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<Item[]>(initialData.items);
+  const [staff, setStaff] = useState<Staff[]>(initialData.staff);
+  const [accessCodes, setAccessCodes] = useState<AccessCode[]>(initialData.accessCodes);
+  const [stores] = useState<{ code: string; name: string }[]>(staticStores);
   
   const [currentAdminView, setCurrentAdminView] = useState<'admin' | 'dashboard'>('admin');
 
-  const fetchData = async (user: User) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      let data;
-      if (user.role === 'admin') {
-        data = await apiGet('?path=data/all');
-      } else {
-        data = await apiGet(`?path=data/store&storeCode=${user.storeId}`);
+  const ADMIN_PASSWORD = 'mohamadhassoun012@gmail.com';
+
+  const handleLogin = (role: 'admin' | 'staff', credential: string) => {
+      if (role === 'admin') {
+          if (credential === ADMIN_PASSWORD) {
+              const user: User = { role: 'admin', staffId: 'admin_user', name: 'Admin', credential };
+              setCurrentUser(user);
+              setCurrentAdminView('admin');
+              return;
+          }
+          throw new Error('Invalid admin password.');
       }
-      setItems(data.items || []);
-      setStaff(data.staff || []);
-      setAccessCodes(data.accessCodes || []);
-      setStores(data.stores || []); // Update stores from backend
-    } catch (e) {
-      setError('Failed to load application data. Please check your connection and try again.');
-    } finally {
-      setIsLoading(false);
-    }
+      
+      if (role === 'staff') {
+          const code = accessCodes.find(c => c.code.toUpperCase() === credential.toUpperCase());
+          if (code) {
+              const staffMember = staff.find(s => s.staffId === code.staffId);
+              if (staffMember) {
+                  const user: User = {
+                      role: 'staff',
+                      staffId: staffMember.staffId,
+                      storeId: staffMember.storeId,
+                      name: staffMember.name,
+                      credential,
+                  };
+                  setCurrentUser(user);
+                  return;
+              }
+          }
+          throw new Error('Invalid access code.');
+      }
   };
 
-  const handleLoginSuccess = (user: User) => {
-    setCurrentUser(user);
-    fetchData(user);
-    if (user.role === 'admin') {
-      setCurrentAdminView('admin');
-    }
-  };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    // Clear all data on logout
-    setItems([]);
-    setStaff([]);
-    setAccessCodes([]);
   };
 
-  const handleAddItem = async (item: Omit<Item, 'itemId' | 'addedByStaffId'>, storeCode: string) => {
-    try {
-      await apiPost('/items', { ...item, staffId: currentUser?.staffId, storeCode });
-      fetchData(currentUser!); // Refetch data to show the new item
-    } catch (e) {
-      alert('Failed to add item. Please try again.');
-    }
+  const handleAddItem = (item: Omit<Item, 'itemId' | 'addedByStaffId' | 'storeCode'>) => {
+    if (!currentUser) return;
+    const newItem: Item = {
+      ...item,
+      itemId: `item_${Date.now()}`,
+      addedByStaffId: currentUser.staffId,
+      storeCode: currentUser.storeId,
+    };
+    setItems(prevItems => [...prevItems, newItem]);
   };
 
   const handleUpdateItem = (updatedItem: Item) => {
-      // This would require a new /items/update endpoint. For now, we refetch.
-      console.log("Update functionality would require a backend endpoint.", updatedItem);
+    setItems(prevItems => prevItems.map(item => item.itemId === updatedItem.itemId ? updatedItem : item));
   };
   
   const handleDeleteItem = (itemId: string) => {
-      // This would require a new /items/delete endpoint.
-      console.log("Delete functionality would require a backend endpoint.", itemId);
+    setItems(prevItems => prevItems.filter(item => item.itemId !== itemId));
   };
 
-  const handleAddStaffAndCode = async (storeCode: string, staffIdInput: string) => {
-    try {
-      const result = await apiPost('/admin/staff', { storeCode, staffId: staffIdInput });
-      alert(`Successfully created staff ${result.staffId} with access code ${result.accessCode}`);
-      fetchData(currentUser!); // Refetch to get updated staff/codes list
-      return true;
-    } catch (e: any) {
-      alert(`Error: ${e.message}`);
-      return false;
+  const handleAddStaffAndCode = (storeCode: string, staffIdInput: string): boolean => {
+    const newStaffId = staffIdInput.trim() || `staff_${Date.now()}`;
+    if (staff.some(s => s.staffId === newStaffId)) {
+        alert('Staff ID already exists.');
+        return false;
     }
+    
+    const newStaffMember: Staff = { staffId: newStaffId, storeId: storeCode, name: newStaffId };
+    setStaff(prev => [...prev, newStaffMember]);
+
+    const generateAccessCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+    const newCode = generateAccessCode();
+    const newAccessCode: AccessCode = { code: newCode, staffId: newStaffId, createdAt: Date.now(), storeCode };
+    setAccessCodes(prev => [...prev, newAccessCode]);
+    
+    alert(`Successfully created staff ${newStaffId} with access code ${newCode}`);
+    return true;
   };
 
   const handleDeleteCode = (codeToDelete: AccessCode) => {
-      // This would require a new /admin/codes/delete endpoint.
-      console.log("Delete code functionality would require a backend endpoint.", codeToDelete);
+    if (!window.confirm(`Are you sure you want to delete the code for Staff ID: ${codeToDelete.staffId}? This will also delete the staff member.`)) return;
+    const staffIdToDelete = codeToDelete.staffId;
+    setAccessCodes(prev => prev.filter(c => c.staffId !== staffIdToDelete));
+    setStaff(prev => prev.filter(s => s.staffId !== staffIdToDelete));
   };
 
   const navigateToDashboard = () => setCurrentAdminView('dashboard');
   const navigateToAdmin = () => setCurrentAdminView('admin');
 
   if (!currentUser) {
-    return <LoginPage onLogin={handleLoginSuccess} />;
-  }
-
-  if (isLoading) {
-      return (
-          <div className="flex items-center justify-center min-h-screen">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-          </div>
-      );
-  }
-
-  if (error) {
-       return (
-          <div className="flex flex-col items-center justify-center min-h-screen p-4">
-              <p className="text-error text-center">{error}</p>
-              <button onClick={handleLogout} className="mt-4 bg-primary text-white font-bold py-2 px-6 rounded-lg">
-                  Back to Login
-              </button>
-          </div>
-       );
+    return <LoginPage onLoginAttempt={handleLogin} />;
   }
 
   const appData = { items, staff, accessCodes, stores };
@@ -153,7 +187,7 @@ const App: React.FC = () => {
             onDeleteItem={handleDeleteItem}
         />;
       default:
-        return <LoginPage onLogin={handleLoginSuccess} />;
+        return <LoginPage onLoginAttempt={handleLogin} />;
     }
   };
 
